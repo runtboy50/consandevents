@@ -1,6 +1,6 @@
 <!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
 <title>Con+Events in Thai</title>
-<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@700;800&family=IBM+Plex+Sans+Thai:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
@@ -249,14 +249,6 @@ h1 .dot { color: var(--accent); }
 (function () {
   "use strict";
   var SHEET_ID = "1AScvweCWXOkdzftP13zqPFG6iNql33uWoWd9LMIuVlg";
-  var SERVER = "Google Sheets";
-  var FIELDS = [
-    "sheets.properties.title",
-    "sheets.data.rowData.values.formattedValue",
-    "sheets.data.rowData.values.hyperlink",
-    "sheets.data.rowData.values.textFormatRuns",
-    "sheets.data.rowData.values.effectiveFormat.textFormat.strikethrough"
-  ];
   var MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
   var MON = { jan:0, feb:1, mar:2, apr:3, may:4, jun:5, jul:6, aug:7, sep:8, oct:9, nov:10, dec:11 };
   var WD = ["SUN","MON","TUE","WED","THU","FRI","SAT"];
@@ -267,7 +259,7 @@ h1 .dot { color: var(--accent); }
     tabs: {},            // year -> events[]
     view: { y: now.getFullYear(), m: now.getMonth() },
     q: "", marked: false, artist: "",
-    loading: true, errors: {}, synced: 0, mcp: null, unsubs: []
+    loading: true, errors: {}, synced: 0
   };
 
   function pad(n) { return (n < 10 ? "0" : "") + n; }
@@ -308,72 +300,47 @@ h1 .dot { color: var(--accent); }
     return null;
   }
 
-  function isTagColor(c) {
-    if (!c) return false;
-    var r = c.red || 0, g = c.green || 0, b = c.blue || 0;
-    var red = r > 0.6 && g < 0.45 && b < 0.45;
-    var green = g > 0.45 && g > r + 0.15 && g > b + 0.15;
-    return red || green;
-  }
-
-  function cellInfo(c) {
-    c = c || {};
-    var text = c.formattedValue || "";
-    var info = { text: text.trim(), link: c.hyperlink || "", struck: false, normal: text.trim(), old: "", plain: text.trim() };
-    var eff = c.effectiveFormat && c.effectiveFormat.textFormat && c.effectiveFormat.textFormat.strikethrough === true;
-    var runs = c.textFormatRuns;
-    if (runs && runs.length && text) {
-      var keep = "", cut = "", plain = "";
-      for (var i = 0; i < runs.length; i++) {
-        var st = runs[i].startIndex || 0;
-        var en = i + 1 < runs.length ? (runs[i + 1].startIndex || 0) : text.length;
-        var seg = text.slice(st, en);
-        if (!isTagColor(runs[i].format && runs[i].format.foregroundColor)) plain += seg;
-        if (runs[i].format && runs[i].format.strikethrough) cut += seg; else keep += seg;
-      }
-      var pl = plain.replace(/\(\s*\)|\[\s*\]/g, "").replace(/\s+/g, " ").trim();
-      if (pl) info.plain = pl;
-      if (cut.trim() && !keep.trim()) info.struck = true;
-      else if (cut.trim()) { info.normal = keep.trim(); info.old = cut.trim(); }
-    }
-    if (eff && text) info.struck = true;
-    return info;
-  }
-
-  function parseTab(year, rows) {
+  function parseRows(year, rows) {
     var events = [], cur = null;
     rows.forEach(function (r, i) {
-      var v = (r && r.values) || [];
-      var A = cellInfo(v[0]), B = cellInfo(v[1]), C = cellInfo(v[2]), D = cellInfo(v[3]), E = cellInfo(v[4]), F = cellInfo(v[5]), G = cellInfo(v[6]);
-      if (i === 0 && B.text.toLowerCase() === "date") return;
-      if (B.text) {
-        var pd = parseDate(B.text, year);
+      var colA = (r[0] || "").trim();
+      var colB = (r[1] || "").trim();
+      var colC = (r[2] || "").trim();
+      var colD = (r[3] || "").trim();
+      var colE = (r[4] || "").trim();
+      var colF = (r[5] || "").trim();
+      var colG = (r[6] || "").trim();
+
+      if (i === 0 && colB.toLowerCase() === "date") return;
+      if (colB) {
+        var pd = parseDate(colB, year);
         if (!pd) { cur = null; return; }
-        var url = safeUrl(E.link) || (safeUrl(E.text) ? E.text : "");
+        var url = safeUrl(colE);
         cur = {
-          id: year + "-" + i, year: year, dateText: B.text, days: pd.days, tba: pd.tba,
-          artists: C.text ? [{ name: C.plain, struck: C.struck }] : [],
-          venue: D.struck ? "" : D.normal, oldVenue: D.struck ? D.text : D.old,
-          title: safeUrl(E.text) ? "" : E.text,
-          link: url, promoter: F.text, note: G.text,
-          marked: /[✔✓]/.test(A.text),
-          titleStruck: E.struck
+          id: year + "-" + i, year: year, dateText: colB, days: pd.days || [], tba: pd.tba,
+          artists: colC ? [{ name: colC, struck: false }] : [],
+          venue: colD, oldVenue: "",
+          title: safeUrl(colE) ? "" : colE,
+          link: url, promoter: colF, note: colG,
+          marked: /[✔✓]/.test(colA),
+          titleStruck: false
         };
         events.push(cur);
-      } else if (A.text && !C.text) {
+      } else if (colA && !colC) {
         cur = null;
-      } else if (cur && C.text) {
-        cur.artists.push({ name: C.plain, struck: C.struck });
-        if (G.text) cur.note = cur.note ? cur.note + " · " + G.text : G.text;
-      } else if (cur && !A.text && D.text && !E.text && !F.text) {
-        cur.artists.push({ name: D.plain, struck: D.struck });
+      } else if (cur && colC) {
+        cur.artists.push({ name: colC, struck: false });
+        if (colG) cur.note = cur.note ? cur.note + " · " + colG : colG;
+      } else if (cur && !colA && colD && !colE && !colF) {
+        cur.artists.push({ name: colD, struck: false });
       }
     });
+
     events.forEach(function (ev) {
-      ev.cancelled = ev.titleStruck || (ev.artists.length > 0 && ev.artists.every(function (a) { return a.struck; }));
+      ev.cancelled = false;
       ev.name = ev.title || (ev.artists[0] && ev.artists[0].name) || "Untitled";
       ev.label = (ev.artists[0] && ev.artists[0].name) || ev.title || "Untitled";
-      ev.first = ev.days[0] || (ev.year + "-" + pad(ev.tba + 1) + "-99");
+      ev.first = ev.days[0] || (ev.year + "-" + pad((ev.tba !== undefined ? ev.tba + 1 : 1)) + "-99");
       ev.last = ev.days.length ? ev.days[ev.days.length - 1] : ev.first;
       ev.hay = [ev.name, ev.venue, ev.oldVenue, ev.promoter, ev.note || "", ev.dateText, ev.artists.map(function (a) { return a.name; }).join(" ")].join(" ").toLowerCase();
     });
@@ -495,16 +462,8 @@ h1 .dot { color: var(--accent); }
   function renderBanner() {
     var b = $("banner"), codes = Object.keys(state.errors);
     if (!codes.length || allEvents().length) { b.hidden = true; return; }
-    var err = state.errors[codes[0]], c = err && err.code, msg = "Could not load the sheet.", retry = true;
-    if (c === "server_not_connected") { msg = "Google Sheets is not connected to your Claude account. Add it under Settings → Connectors, then reload this page."; retry = false; }
-    else if (c === "needs_reauth") { msg = "Your Google Sheets connection has expired. Reconnect it under Settings → Connectors."; retry = false; }
-    else if (c === "selection_required") { msg = "You have more than one Google Sheets connector. Choose one when Claude asks, then try again."; }
-    else if (c === "not_in_manifest" || c === "consent_required" || c === "approval_required") { msg = "This page needs your approval to read your Google Sheet."; }
-    else if (c === "blocked_by_policy") { msg = "Your organization does not allow pages to read Google Sheets."; retry = false; }
-    else if (c === "tool_error") { msg = "Google Sheets could not read the sheet. Check that your account can open it."; }
-    else if (c === "server_unavailable" || c === "upstream_error" || c === "rate_limited") { msg = "Google Sheets did not answer. Try again in a moment."; }
     b.hidden = false;
-    b.innerHTML = "<p>" + esc(msg) + "</p>" + (retry ? '<button type="button" class="btn" data-act="retry">Try again</button>' : "");
+    b.innerHTML = "<p>Could not load data from Google Sheets. Make sure your Google Sheet is published to the web (File -> Share -> Publish to web).</p><button type=\"button\" class=\"btn\" data-act=\"retry\">Try again</button>";
   }
 
   function render() {
@@ -516,7 +475,7 @@ h1 .dot { color: var(--accent); }
     if (state.artist) renderSide();
     if (state.synced) {
       var t = new Date(state.synced);
-      $("sync").textContent = "· synced " + pad(t.getHours()) + ":" + pad(t.getMinutes()) + (Object.keys(state.errors).length && evs.length ? " (some years did not refresh)" : "");
+      $("sync").textContent = "· synced " + pad(t.getHours()) + ":" + pad(t.getMinutes());
     }
   }
 
@@ -582,105 +541,3 @@ h1 .dot { color: var(--accent); }
     var hit = groups.filter(function (g) { return g.id.slice(2) >= k && /^\d/.test(g.id.slice(2)); })[0] || groups[groups.length - 1];
     if (hit) { scrollTo(hit); flash(hit); }
   }
-  function nextShow() {
-    var tk = todayKey();
-    var ev = allEvents().filter(function (e) { return !e.cancelled && e.days.length && e.last >= tk; })[0];
-    if (!ev) return;
-    jumpEvent(ev.id);
-    var el = $("ev-" + ev.id);
-    if (!el) { var p = ev.first.split("-"); go(+p[0], +p[1] - 1); jumpEvent(ev.id); }
-  }
-
-  document.addEventListener("click", function (e) {
-    var t = e.target.closest("[data-act],[data-theme-set]");
-    if (!t) return;
-    if (t.hasAttribute("data-theme-set")) { setTheme(t.getAttribute("data-theme-set")); return; }
-    var act = t.getAttribute("data-act"), v = state.view;
-    if (act === "prev") go(v.m === 0 ? v.y - 1 : v.y, v.m === 0 ? 11 : v.m - 1);
-    else if (act === "next") go(v.m === 11 ? v.y + 1 : v.y, v.m === 11 ? 0 : v.m + 1);
-    else if (act === "today") { var n = new Date(); go(n.getFullYear(), n.getMonth()); }
-    else if (act === "nextshow") nextShow();
-    else if (act === "marked") { state.marked = !state.marked; t.setAttribute("aria-pressed", String(state.marked)); render(); }
-    else if (act === "ev") jumpEvent(t.getAttribute("data-id"));
-    else if (act === "day") jumpDay(t.getAttribute("data-key"));
-    else if (act === "retry") start();
-    else if (act === "artist") openSide(t.getAttribute("data-name"));
-    else if (act === "closeside") closeSide();
-    else if (act === "sideev") { var sid = t.getAttribute("data-id"); if (window.innerWidth <= 900) closeSide(); jumpEvent(sid); }
-  });
-  document.addEventListener("keydown", function (e) { if (e.key === "Escape" && state.artist) closeSide(); });
-  $("q").addEventListener("input", function (e) { state.q = e.target.value.trim().toLowerCase(); render(); });
-
-  /* ---------- theme ---------- */
-  function setTheme(mode) {
-    var root = document.documentElement;
-    if (mode === "light" || mode === "dark") root.setAttribute("data-theme", mode); else root.removeAttribute("data-theme");
-    Array.prototype.forEach.call(document.querySelectorAll("[data-theme-set]"), function (b) { b.setAttribute("aria-pressed", String(b.getAttribute("data-theme-set") === mode)); });
-    try { localStorage.setItem("conev-theme", mode); } catch (e) {}
-  }
-  try { var saved = localStorage.getItem("conev-theme"); if (saved) setTheme(saved); } catch (e) {}
-
-  /* ---------- data (live from the Google Sheets connector) ---------- */
-  function payloadOf(result) {
-    var p = result && result.payload;
-    if (typeof p === "string") { try { p = JSON.parse(p); } catch (e) { p = null; } }
-    if (!p && result && result.structuredContent) p = result.structuredContent;
-    return p;
-  }
-  function onTab(year, result) {
-    var p = payloadOf(result);
-    var rows = (p && p.sheets && p.sheets[0] && p.sheets[0].data && p.sheets[0].data[0] && p.sheets[0].data[0].rowData) || [];
-    state.tabs[year] = parseTab(year, rows);
-    delete state.errors[year];
-    state.synced = (result.cache && result.cache.storedAt) || Date.now();
-    state.loading = false;
-    schedule();
-  }
-  function onError(year, err) {
-    state.errors[year] = err || { code: "upstream_error" };
-    state.loading = false;
-    schedule();
-  }
-  function loadTab(mcp, title, year) {
-    var input = { spreadsheetId: SHEET_ID, ranges: ["'" + title + "'!A:G"], includeGridData: true, fields: FIELDS };
-    var thisYear = new Date().getFullYear();
-    function once() { mcp.callTool(SERVER, "get_spreadsheet", input, { cache: { staleTime: 300000 } }).then(function (r) { onTab(year, r); }, function (e) { onError(year, e); }); }
-    if (year >= thisYear) {
-      var un = mcp.watchTool(SERVER, "get_spreadsheet", input, function (ev) {
-        if (ev.type === "data") onTab(year, ev.result);
-        else if (ev.error && ev.error.code === "bad_request") once();
-        else onError(year, ev.error);
-      }, { refetchInterval: 60000, cache: { staleTime: 30000 } });
-      state.unsubs.push(un);
-    } else once();
-  }
-  function start() {
-    state.unsubs.forEach(function (u) { try { u(); } catch (e) {} });
-    state.unsubs = []; state.errors = {}; state.loading = true; $("banner").hidden = true; render();
-    claude.use("mcp").then(function (mcp) {
-      if (!mcp) {
-        state.loading = false;
-        $("list").innerHTML = '<div class="empty">This page reads your Google Sheet through Claude. Open it from your Claude artifacts while signed in to see your shows.</div>';
-        $("sync").textContent = "· not connected";
-        return;
-      }
-      var go = function () {
-        mcp.callTool(SERVER, "get_spreadsheet", { spreadsheetId: SHEET_ID, fields: ["sheets.properties.title"] }, { cache: { staleTime: 60000 } }).then(function (r) {
-          var p = payloadOf(r), sheets = (p && p.sheets) || [];
-          sheets.forEach(function (s) {
-            var title = s.properties && s.properties.title, mm = /^(\d{4})\/\d{4}$/.exec(title || "");
-            if (mm) loadTab(mcp, title, +mm[1]);
-          });
-          if (!sheets.length) onError("tabs", { code: "tool_error" });
-        }, function (e) { onError("tabs", e); });
-      };
-      go();
-    }, function (e) { onError("tabs", e); });
-  }
-
-  render();
-  start();
-})();
-</script>
-
-</body></html>
